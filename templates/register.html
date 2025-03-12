@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header text-center bg-primary text-white">
+                    <h3 class="mb-0">تسجيل حساب جديد</h3>
+                </div>
+                <div class="card-body">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                    <form method="POST">
+                        <!-- Basic Information Section -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0">المعلومات الأساسية</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="username" class="form-label">اسم المستخدم</label>
+                                        <input type="text" class="form-control" id="username" name="username" required>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="name" class="form-label">الاسم الكامل</label>
+                                        <input type="text" class="form-control" id="name" name="name" required>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="password" class="form-label">كلمة المرور</label>
+                                        <input type="password" class="form-control" id="password" name="password" required>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="confirm_password" class="form-label">تأكيد كلمة المرور</label>
+                                        <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-12">
+                                        <label for="user_type" class="form-label">نوع المستخدم</label>
+                                        <select class="form-select" id="user_type" name="user_type" required>
+                                            <option value="student">طالب</option>
+                                            <option value="instructor">تدريسي</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Student Information Section -->
+                        <div class="card mb-3" id="student_fields" style="display: none;">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0">معلومات الطالب</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="student_id" class="form-label">الرقم الجامعي</label>
+                                        <input type="text" class="form-control" id="student_id" name="student_id" 
+                                               pattern="[0-9]+" title="يرجى إدخال أرقام فقط">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="stage" class="form-label">المرحلة</label>
+                                        <select class="form-select" id="stage" name="stage">
+                                            <option value="1">الأولى</option>
+                                            <option value="2">الثانية</option>
+                                            <option value="3">الثالثة</option>
+                                            <option value="4">الرابعة</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="academic_year" class="form-label">السنة الدراسية</label>
+                                        <select class="form-select" id="academic_year" name="academic_year">
+                                            <option value="2024/2025">2024/2025</option>
+                                            <option value="2023/2024">2023/2024</option>
+                                            <option value="2022/2023">2022/2023</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="semester" class="form-label">الفصل الدراسي</label>
+                                        <select class="form-select" id="semester" name="semester">
+                                            <option value="1">الفصل الأول</option>
+                                            <option value="2">الفصل الثاني</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="department" class="form-label">القسم</label>
+                                        <select class="form-select" id="department" name="department">
+                                            <option value="علوم الحاسوب">علوم الحاسوب</option>
+                                            <option value="تكنولوجيا المعلومات">تكنولوجيا المعلومات</option>
+                                            <option value="نظم المعلومات">نظم المعلومات</option>
+                                            <option value="هندسة الشبكات">هندسة الشبكات</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="study_type" class="form-label">نوع الدراسة</label>
+                                        <select class="form-select" id="study_type" name="study_type">
+                                            <option value="صباحي">صباحي</option>
+                                            <option value="مسائي">مسائي</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">تسجيل الحساب</button>
+                            <a href="{{ url_for('login') }}" class="btn btn-secondary">العودة لتسجيل الدخول</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function updateStudentFields() {
+    var userType = document.getElementById('user_type');
+    var studentFields = document.getElementById('student_fields');
+    if (userType.value === 'student') {
+        studentFields.style.display = 'block';
+        document.getElementById('student_id').required = true;
+        document.getElementById('stage').required = true;
+        document.getElementById('academic_year').required = true;
+        document.getElementById('semester').required = true;
+        document.getElementById('department').required = true;
+        document.getElementById('study_type').required = true;
+    } else {
+        studentFields.style.display = 'none';
+        document.getElementById('student_id').required = false;
+        document.getElementById('stage').required = false;
+        document.getElementById('academic_year').required = false;
+        document.getElementById('semester').required = false;
+        document.getElementById('department').required = false;
+        document.getElementById('study_type').required = false;
+    }
+}
+
+// Run on page load
+document.addEventListener('DOMContentLoaded', updateStudentFields);
+
+// Run on select change
+document.getElementById('user_type').addEventListener('change', updateStudentFields);
+</script>
+{% endblock %}

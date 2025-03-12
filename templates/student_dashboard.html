@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="sidebar-toggle">
+    <i class="fas fa-bars"></i>
+</div>
+
+<div class="sidebar">
+    <div class="p-3">
+        <h4 class="text-center mb-4">لوحة الطالب</h4>
+        <div class="text-center mb-4">
+            <i class="fas fa-user-graduate fa-3x mb-2"></i>
+            <h5>{{ current_user.name }}</h5>
+            <p class="text-muted">طالب</p>
+        </div>
+        <hr>
+        <h6 class="sidebar-heading px-3 mt-4 mb-2 text-muted">المراحل الدراسية</h6>
+        <ul class="nav flex-column" id="stageNav">
+            {% for stage in stages %}
+            <li class="nav-item">
+                <a class="nav-link {% if loop.first %}active{% endif %}" href="#stage{{ stage }}">
+                    <i class="fas fa-graduation-cap me-2"></i>
+                    المرحلة {{ stage }}
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        <hr>
+        <div class="mt-5">
+            <a href="{{ url_for('logout') }}" class="btn btn-danger w-100">
+                <i class="fas fa-sign-out-alt me-2"></i>
+                تسجيل الخروج
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <div class="container-fluid">
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <h2 class="stage-title fade-in">
+                    <i class="fas fa-chart-line me-2"></i>
+                    سجل الدرجات
+                </h2>
+            </div>
+        </div>
+
+        <div class="alert alert-info fade-in" role="alert">
+            <i class="fas fa-info-circle me-2"></i>
+            مرحبًا بك في نظام اللجان الامتحانية. يمكنك عرض درجاتك لجميع المراحل والكورسات هنا.
+        </div>
+
+        <div class="slide-in">
+            {% for stage in stages %}
+                <div id="stage{{ stage }}" class="mb-5">
+                    <h3 class="stage-title">
+                        <i class="fas fa-graduation-cap me-2"></i>
+                        المرحلة {{ stage }}
+                    </h3>
+                    
+                    <ul class="nav nav-pills mb-3" id="pills-tab-{{ stage }}" role="tablist">
+                        {% for semester in semesters %}
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link {% if loop.first %}active{% endif %}" 
+                                        id="pills-semester{{ stage }}-{{ semester }}-tab" 
+                                        data-bs-toggle="pill" 
+                                        data-bs-target="#pills-semester{{ stage }}-{{ semester }}" 
+                                        type="button" 
+                                        role="tab" 
+                                        aria-controls="pills-semester{{ stage }}-{{ semester }}" 
+                                        aria-selected="{% if loop.first %}true{% else %}false{% endif %}">
+                                    الكورس {{ semester }}
+                                </button>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                    
+                    <div class="tab-content" id="pills-tabContent-{{ stage }}">
+                        {% for semester in semesters %}
+                            <div class="tab-pane fade {% if loop.first %}show active{% endif %}" 
+                                 id="pills-semester{{ stage }}-{{ semester }}" 
+                                 role="tabpanel" 
+                                 aria-labelledby="pills-semester{{ stage }}-{{ semester }}-tab">
+                                
+                                {% if all_grades[stage][semester] %}
+                                    <div class="card grade-table">
+                                        <div class="card-body">
+                                            <div class="table-responsive">
+                                                <table class="table table-hover">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>المادة</th>
+                                                            <th>السعي (0-50)</th>
+                                                            <th>الامتحان النهائي (0-50)</th>
+                                                            <th>درجة القرار (0-10)</th>
+                                                            <th>الوحدات</th>
+                                                            <th>المجموع</th>
+                                                            <th>التقدير</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {% for item in all_grades[stage][semester] %}
+                                                            <tr>
+                                                                <td>{{ item.course.name }}</td>
+                                                                <td>{{ item.grade.coursework }}</td>
+                                                                <td>{{ item.grade.final_exam }}</td>
+                                                                <td>{{ item.grade.decision_marks }}</td>
+                                                                <td>{{ item.course.units }}</td>
+                                                                <td>{{ item.grade.total }}</td>
+                                                                <td>
+                                                                    <span class="badge {% if item.grade.total < 50 %}bg-danger{% elif item.grade.total < 60 %}bg-warning{% elif item.grade.total < 70 %}bg-info{% elif item.grade.total < 80 %}bg-primary{% elif item.grade.total < 90 %}bg-success{% else %}bg-success{% endif %}">
+                                                                        {{ item.grade.grade_evaluation }}
+                                                                    </span>
+                                                                </td>
+                                                            </tr>
+                                                        {% endfor %}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            
+                                            {% set total_grades = namespace(value=0) %}
+                                            {% set passed_courses = namespace(value=0) %}
+                                            {% set failed_courses = namespace(value=0) %}
+                                            
+                                            {% for item in all_grades[stage][semester] %}
+                                                {% set total_grades.value = total_grades.value + item.grade.total %}
+                                                {% if item.grade.total >= 50 %}
+                                                    {% set passed_courses.value = passed_courses.value + 1 %}
+                                                {% else %}
+                                                    {% set failed_courses.value = failed_courses.value + 1 %}
+                                                {% endif %}
+                                            {% endfor %}
+                                            
+                                            {% set average_grade = total_grades.value / all_grades[stage][semester]|length if all_grades[stage][semester]|length > 0 else 0 %}
+                                            
+                                            {% set overall_evaluation = '' %}
+                                            {% if average_grade < 50 %}
+                                                {% set overall_evaluation = 'ضعيف' %}
+                                            {% elif average_grade < 60 %}
+                                                {% set overall_evaluation = 'مقبول' %}
+                                            {% elif average_grade < 70 %}
+                                                {% set overall_evaluation = 'متوسط' %}
+                                            {% elif average_grade < 80 %}
+                                                {% set overall_evaluation = 'جيد' %}
+                                            {% elif average_grade < 90 %}
+                                                {% set overall_evaluation = 'جيد جدا' %}
+                                            {% else %}
+                                                {% set overall_evaluation = 'امتياز' %}
+                                            {% endif %}
+                                            
+                                            <div class="summary-box mt-3">
+                                                <h6 class="mb-3">ملخص الدرجات للكورس</h6>
+                                                <div class="row">
+                                                    <div class="col-md-3">
+                                                        <p><strong>الدرجة النهائية للكورس:</strong> <span class="badge bg-primary">{{ average_grade|round(2) }}</span></p>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <p><strong>المواد الناجحة:</strong> <span class="badge bg-success">{{ passed_courses.value }}</span></p>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <p><strong>المواد الراسبة:</strong> <span class="badge bg-danger">{{ failed_courses.value }}</span></p>
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <p><strong>التقدير:</strong> <span class="badge bg-info">{{ overall_evaluation }}</span></p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% else %}
+                                    <div class="alert alert-warning">
+                                        <i class="fas fa-exclamation-circle me-2"></i>
+                                        لا توجد درجات متاحة لهذا الكورس.
+                                    </div>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // Smooth scrolling for sidebar links
+        $("#stageNav .nav-link").on('click', function(event) {
+            if (this.hash !== "") {
+                event.preventDefault();
+                const hash = this.hash;
+                
+                // Update active state
+                $('#stageNav .nav-link').removeClass('active');
+                $(this).addClass('active');
+                
+                $('html, body').animate({
+                    scrollTop: $(hash).offset().top - 20
+                }, 800);
+            }
+        });
+        
+        // Toggle sidebar on mobile
+        $('.sidebar-toggle').click(function() {
+            $('.sidebar').toggleClass('active');
+        });
+    });
+</script>
+{% endblock %}

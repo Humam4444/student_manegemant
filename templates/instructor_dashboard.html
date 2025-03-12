@@ -1,0 +1,434 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="sidebar-toggle">
+    <i class="fas fa-bars"></i>
+</div>
+
+<div class="sidebar">
+    <div class="p-3">
+        <h4 class="text-center mb-4">لوحة التحكم</h4>
+        <div class="text-center mb-4">
+            <i class="fas fa-user-tie fa-3x mb-2"></i>
+            <h5>{{ current_user.name }}</h5>
+            <p class="text-muted">تدريسي</p>
+        </div>
+        <hr>
+        <h6 class="sidebar-heading px-3 mt-4 mb-2 text-muted">المراحل الدراسية</h6>
+        <ul class="nav flex-column" id="stageNav">
+            {% for stage in stages %}
+            <li class="nav-item">
+                <a class="nav-link {% if loop.first %}active{% endif %}" href="#" data-stage="{{ stage }}">
+                    <i class="fas fa-graduation-cap me-2"></i>
+                    المرحلة {{ stage }}
+                </a>
+                <div class="ms-4 semester-links" id="semesterLinks{{ stage }}">
+                    <a class="nav-link semester-link active" href="#" data-stage="{{ stage }}" data-semester="1">
+                        <i class="fas fa-book me-2"></i>
+                        الكورس الأول
+                    </a>
+                    <a class="nav-link semester-link" href="#" data-stage="{{ stage }}" data-semester="2">
+                        <i class="fas fa-book me-2"></i>
+                        الكورس الثاني
+                    </a>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        <hr>
+        <div class="mt-5">
+            <a href="{{ url_for('logout') }}" class="btn btn-danger w-100">
+                <i class="fas fa-sign-out-alt me-2"></i>
+                تسجيل الخروج
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <div class="container-fluid">
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <h2 class="stage-title fade-in" id="stageTitle">المرحلة 1 - الكورس الأول</h2>
+            </div>
+            <div class="col-md-6">
+                <div class="search-box fade-in">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="searchInput" placeholder="البحث عن طالب...">
+                        <button class="btn btn-primary" id="searchBtn">
+                            <i class="fas fa-search"></i>
+                            بحث
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="alert alert-info fade-in" role="alert">
+            <i class="fas fa-info-circle me-2"></i>
+            يمكنك تعديل درجات الطلاب مباشرة من الجدول أدناه. سيتم حفظ التغييرات تلقائياً.
+        </div>
+
+        <div id="studentsContainer" class="slide-in">
+            <!-- Students data will be loaded here -->
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">جاري التحميل...</span>
+                </div>
+                <p class="mt-2">جاري تحميل بيانات الطلاب...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        let currentStage = 1;
+        let currentSemester = 1;
+        
+        // Load students for the first stage and semester on page load
+        loadStudents(currentStage, currentSemester);
+        
+        // Handle stage navigation
+        $('#stageNav .nav-link').click(function(e) {
+            e.preventDefault();
+            
+            // Update active state
+            $('#stageNav .nav-link').removeClass('active');
+            $(this).addClass('active');
+            
+            // Get the selected stage
+            currentStage = $(this).data('stage');
+            
+            // Reset semester to 1 when changing stage
+            currentSemester = 1;
+            
+            // Update active semester link
+            $('.semester-link').removeClass('active');
+            $(`.semester-link[data-stage="${currentStage}"][data-semester="1"]`).addClass('active');
+            
+            // Update title
+            updateTitle();
+            
+            // Load students for the selected stage and semester
+            loadStudents(currentStage, currentSemester);
+        });
+        
+        // Handle semester navigation
+        $(document).on('click', '.semester-link', function(e) {
+            e.preventDefault();
+            
+            // Update active state
+            $('.semester-link').removeClass('active');
+            $(this).addClass('active');
+            
+            // Get the selected stage and semester
+            currentStage = $(this).data('stage');
+            currentSemester = $(this).data('semester');
+            
+            // Update title
+            updateTitle();
+            
+            // Load students for the selected stage and semester
+            loadStudents(currentStage, currentSemester);
+        });
+        
+        // Handle search
+        $('#searchBtn').click(function() {
+            searchStudent();
+        });
+        
+        // Handle search on Enter key
+        $('#searchInput').keypress(function(e) {
+            if (e.which === 13) {
+                searchStudent();
+            }
+        });
+        
+        // Function to update the title
+        function updateTitle() {
+            $('#stageTitle').text(`المرحلة ${currentStage} - الكورس ${currentSemester}`);
+        }
+        
+        // Function to load students
+        function loadStudents(stage, semester) {
+            $('#studentsContainer').html(`
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">جاري التحميل...</span>
+                    </div>
+                    <p class="mt-2">جاري تحميل بيانات الطلاب...</p>
+                </div>
+            `);
+            
+            $.ajax({
+                url: '{{ url_for("get_students_by_stage_semester") }}',
+                method: 'POST',
+                data: {
+                    stage: stage,
+                    semester: semester
+                },
+                success: function(data) {
+                    displayStudents(data);
+                },
+                error: function(xhr) {
+                    $('#studentsContainer').html(`
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            حدث خطأ أثناء تحميل البيانات. يرجى المحاولة مرة أخرى.
+                        </div>
+                    `);
+                    console.error('Error loading students:', xhr.responseText);
+                }
+            });
+        }
+        
+        // Function to search for a student
+        function searchStudent() {
+            const searchTerm = $('#searchInput').val().trim();
+            
+            if (searchTerm === '') {
+                // If search term is empty, load all students
+                loadStudents(currentStage, currentSemester);
+                return;
+            }
+            
+            $('#studentsContainer').html(`
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">جاري البحث...</span>
+                    </div>
+                    <p class="mt-2">جاري البحث عن "${searchTerm}"...</p>
+                </div>
+            `);
+            
+            $.ajax({
+                url: '{{ url_for("search_student") }}',
+                method: 'POST',
+                data: {
+                    search_term: searchTerm,
+                    stage: currentStage,
+                    semester: currentSemester
+                },
+                success: function(data) {
+                    if (data.length === 0) {
+                        $('#studentsContainer').html(`
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-circle me-2"></i>
+                                لم يتم العثور على نتائج للبحث عن "${searchTerm}".
+                            </div>
+                        `);
+                    } else {
+                        displayStudents(data);
+                    }
+                },
+                error: function(xhr) {
+                    $('#studentsContainer').html(`
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            حدث خطأ أثناء البحث. يرجى المحاولة مرة أخرى.
+                        </div>
+                    `);
+                    console.error('Error searching student:', xhr.responseText);
+                }
+            });
+        }
+        
+        // Function to display students
+        function displayStudents(students) {
+            if (students.length === 0) {
+                $('#studentsContainer').html(`
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        لا يوجد طلاب في هذه المرحلة والكورس.
+                    </div>
+                `);
+                return;
+            }
+            
+            let html = '';
+            
+            students.forEach(function(student, index) {
+                html += `
+                    <div class="card grade-table mb-4">
+                        <div class="card-header bg-light">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-user-graduate me-2"></i>
+                                    ${student.name} - ${student.student_id}
+                                </h5>
+                                <span class="badge bg-primary">${index + 1}</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>المادة</th>
+                                            <th>السعي (0-50)</th>
+                                            <th>الامتحان النهائي (0-50)</th>
+                                            <th>درجة القرار (0-10)</th>
+                                            <th>الوحدات</th>
+                                            <th>المجموع</th>
+                                            <th>التقدير</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                `;
+                
+                student.grades.forEach(function(grade) {
+                    html += `
+                        <tr>
+                            <td>${grade.course_name}</td>
+                            <td>
+                                <input type="number" class="form-control form-control-sm grade-input" 
+                                    data-grade-id="${grade.grade_id}" 
+                                    data-field="coursework" 
+                                    min="0" max="50" 
+                                    value="${grade.coursework}">
+                            </td>
+                            <td>
+                                <input type="number" class="form-control form-control-sm grade-input" 
+                                    data-grade-id="${grade.grade_id}" 
+                                    data-field="final_exam" 
+                                    min="0" max="50" 
+                                    value="${grade.final_exam}">
+                            </td>
+                            <td>
+                                <input type="number" class="form-control form-control-sm grade-input" 
+                                    data-grade-id="${grade.grade_id}" 
+                                    data-field="decision_marks" 
+                                    min="0" max="10" 
+                                    value="${grade.decision_marks}">
+                            </td>
+                            <td>${grade.units}</td>
+                            <td class="total-grade-${grade.grade_id}">${grade.total}</td>
+                            <td class="evaluation-${grade.grade_id}">${grade.evaluation}</td>
+                        </tr>
+                    `;
+                });
+                
+                // Calculate summary
+                const totalGrades = student.grades.reduce((sum, grade) => sum + grade.total, 0);
+                const passedCourses = student.grades.filter(grade => grade.total >= 50).length;
+                const failedCourses = student.grades.length - passedCourses;
+                const averageGrade = totalGrades / student.grades.length;
+                
+                let overallEvaluation = '';
+                if (averageGrade < 50) {
+                    overallEvaluation = 'ضعيف';
+                } else if (averageGrade < 60) {
+                    overallEvaluation = 'مقبول';
+                } else if (averageGrade < 70) {
+                    overallEvaluation = 'متوسط';
+                } else if (averageGrade < 80) {
+                    overallEvaluation = 'جيد';
+                } else if (averageGrade < 90) {
+                    overallEvaluation = 'جيد جدا';
+                } else {
+                    overallEvaluation = 'امتياز';
+                }
+                
+                html += `
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <div class="summary-box mt-3">
+                                <h6 class="mb-3">ملخص الدرجات للكورس</h6>
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <p><strong>الدرجة النهائية للكورس:</strong> <span class="badge bg-primary">${averageGrade.toFixed(2)}</span></p>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <p><strong>المواد الناجحة:</strong> <span class="badge bg-success">${passedCourses}</span></p>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <p><strong>المواد الراسبة:</strong> <span class="badge bg-danger">${failedCourses}</span></p>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <p><strong>التقدير:</strong> <span class="badge bg-info">${overallEvaluation}</span></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            $('#studentsContainer').html(html);
+            
+            // Handle grade input changes
+            $('.grade-input').change(function() {
+                const gradeId = $(this).data('grade-id');
+                const field = $(this).data('field');
+                const value = $(this).val();
+                
+                // Validate input
+                if (value < 0 || (field === 'decision_marks' && value > 10) || (field !== 'decision_marks' && value > 50)) {
+                    alert('الرجاء إدخال قيمة صحيحة ضمن النطاق المسموح به.');
+                    return;
+                }
+                
+                // Get all grade values
+                const coursework = $(`input[data-grade-id="${gradeId}"][data-field="coursework"]`).val();
+                const finalExam = $(`input[data-grade-id="${gradeId}"][data-field="final_exam"]`).val();
+                const decisionMarks = $(`input[data-grade-id="${gradeId}"][data-field="decision_marks"]`).val();
+                
+                // Update grade
+                $.ajax({
+                    url: '{{ url_for("update_grade") }}',
+                    method: 'POST',
+                    data: {
+                        grade_id: gradeId,
+                        coursework: coursework,
+                        final_exam: finalExam,
+                        decision_marks: decisionMarks
+                    },
+                    success: function(data) {
+                        if (data.success) {
+                            // Update total and evaluation
+                            $(`.total-grade-${gradeId}`).text(data.total);
+                            $(`.evaluation-${gradeId}`).text(data.evaluation);
+                            
+                            // Show success message
+                            const toast = `
+                                <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 5">
+                                    <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+                                        <div class="toast-header bg-success text-white">
+                                            <i class="fas fa-check-circle me-2"></i>
+                                            <strong class="me-auto">تم التحديث</strong>
+                                            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                                        </div>
+                                        <div class="toast-body">
+                                            تم تحديث الدرجة بنجاح.
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                            
+                            // Remove existing toasts
+                            $('.toast').parent().remove();
+                            
+                            // Add new toast
+                            $('body').append(toast);
+                            
+                            // Auto hide toast after 3 seconds
+                            setTimeout(function() {
+                                $('.toast').toast('hide');
+                            }, 3000);
+                        }
+                    },
+                    error: function(xhr) {
+                        console.error('Error updating grade:', xhr.responseText);
+                        alert('حدث خطأ أثناء تحديث الدرجة. يرجى المحاولة مرة أخرى.');
+                    }
+                });
+            });
+        }
+    });
+</script>
+{% endblock %}

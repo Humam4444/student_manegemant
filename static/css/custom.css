@@ -1,0 +1,133 @@
+/* Additional custom styles */
+.animated-icon {
+    transition: all 0.3s;
+}
+
+.animated-icon:hover {
+    transform: scale(1.1);
+}
+
+.card {
+    transition: all 0.3s;
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.btn {
+    border-radius: 5px;
+    padding: 0.5rem 1rem;
+    transition: all 0.3s;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+}
+
+.nav-link {
+    transition: all 0.3s;
+}
+
+.nav-link:hover {
+    transform: translateX(5px);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Badge styles */
+.badge {
+    padding: 0.5em 0.8em;
+    font-weight: 500;
+}
+
+/* Form control focus */
+.form-control:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Table hover effect */
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+/* Toast notification */
+.toast {
+    border: none;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+/* Sidebar active link indicator */
+.sidebar .nav-link.active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background-color: #007bff;
+}
+
+/* Search input animation */
+.search-box .form-control {
+    transition: all 0.3s;
+}
+
+.search-box .form-control:focus {
+    transform: scale(1.02);
+}
+
+/* Grade input highlight */
+.grade-input:focus {
+    background-color: #f8f9fa;
+}
+
+/* Summary box hover effect */
+.summary-box {
+    transition: all 0.3s;
+}
+
+.summary-box:hover {
+    background-color: #dee2e6;
+}
+
+/* Stage title animation */
+.stage-title {
+    position: relative;
+    overflow: hidden;
+}
+
+.stage-title::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background-color: white;
+    transition: width 0.5s;
+}
+
+.stage-title:hover::after {
+    width: 100%;
+}
