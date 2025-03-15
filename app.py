@@ -227,15 +227,24 @@ def search_student():
     if not search_term or not stage or not semester:
         return jsonify({'error': 'Missing parameters'}), 400
     
-    # تعديل: جلب جميع الطلاب بدلاً من تصفية حسب المرحلة
-    students = db.session.query(Student, User).join(User, Student.user_id == User.id).filter(
-        (User.name.like(f'%{search_term}%') | Student.student_id.like(f'%{search_term}%'))
+    # استعلام للطلاب الذين يبدأ اسمهم بكلمة البحث (أولوية أولى)
+    students_starting_with = db.session.query(Student, User).join(User, Student.user_id == User.id).filter(
+        (User.name.like(f'{search_term}%') | Student.student_id.like(f'{search_term}%'))
     ).order_by(Student.student_id).all()
+    
+    # استعلام للطلاب الذين يحتوي اسمهم على كلمة البحث في أي مكان آخر (أولوية ثانية)
+    students_containing = db.session.query(Student, User).join(User, Student.user_id == User.id).filter(
+        (User.name.like(f'%{search_term}%') & ~User.name.like(f'{search_term}%')) | 
+        (Student.student_id.like(f'%{search_term}%') & ~Student.student_id.like(f'{search_term}%'))
+    ).order_by(Student.student_id).all()
+    
+    # دمج النتائج مع الحفاظ على الأولوية
+    all_students = students_starting_with + students_containing
     
     courses = Course.query.filter_by(stage=stage, semester=semester).all()
     
     result = []
-    for student, user in students:
+    for student, user in all_students:
         student_data = {
             'id': student.id,
             'name': user.name,
@@ -404,12 +413,14 @@ def get_all_students():
         
         result.append(student_data)
     
-    # ترتيب الطلاب حسب المعدل (تنازلياً)
-    result.sort(key=lambda x: x['average'], reverse=True)
+    # ترتيب الطلاب حسب الاسم (أبجدياً)
+    result.sort(key=lambda x: x['name'])
     
     # تصفية النتائج حسب نوع التقرير
     if report_type == 'top10':
-        result = result[:10]  # العشرة الأوائل
+        # في حالة العشرة الأوائل، نقوم أولاً بالترتيب حسب المعدل ثم نأخذ أول 10 طلاب
+        result.sort(key=lambda x: x['average'], reverse=True)
+        result = result[:10]
     elif report_type == 'failed':
         result = [s for s in result if s['failed_courses'] > 0]  # الطلاب الراسبين
     elif report_type == 'passed':
@@ -424,12 +435,13 @@ def init_db():
         db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', 'examination.db')
         db_exists = os.path.exists(db_path)
         
-        # Create all tables from models
+        # حذف جميع الجداول وإعادة إنشائها
+        db.drop_all()
         db.create_all()
         
-        # If database already exists, no need to initialize
-        if User.query.count() > 0:
-            return
+        # تجاوز فحص وجود مستخدمين في قاعدة البيانات
+        # if User.query.count() > 0:
+        #     return
             
         # If SQL schema file exists, use it to initialize the database
         if os.path.exists(app.config['SQL_SCHEMA_FILE']):
