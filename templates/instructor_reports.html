@@ -1,0 +1,411 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="sidebar-toggle">
+    <i class="fas fa-bars"></i>
+</div>
+
+<div class="sidebar">
+    <div class="p-3">
+        <h4 class="text-center mb-4">لوحة التقارير</h4>
+        <div class="text-center mb-4">
+            <i class="fas fa-chart-bar fa-3x mb-2"></i>
+            <h5>{{ current_user.name }}</h5>
+            <p class="text-muted">تدريسي</p>
+        </div>
+        <hr>
+        <h6 class="sidebar-heading px-3 mt-4 mb-2 text-muted">المراحل الدراسية</h6>
+        <ul class="nav flex-column" id="stageNav">
+            {% for stage in stages %}
+            <li class="nav-item">
+                <a class="nav-link {% if loop.first %}active{% endif %}" href="#" data-stage="{{ stage }}" data-bs-toggle="collapse" data-bs-target="#semesterLinks{{ stage }}">
+                    <i class="fas fa-graduation-cap me-2"></i>
+                    المرحلة {{ stage }}
+                    <i class="fas fa-chevron-down float-start stage-toggle-icon"></i>
+                </a>
+                <div class="collapse {% if loop.first %}show{% endif %} ms-4 semester-links" id="semesterLinks{{ stage }}">
+                    <a class="nav-link semester-link active" href="#" data-stage="{{ stage }}" data-semester="1">
+                        <i class="fas fa-book me-2"></i>
+                        الكورس الأول
+                    </a>
+                    <a class="nav-link semester-link" href="#" data-stage="{{ stage }}" data-semester="2">
+                        <i class="fas fa-book me-2"></i>
+                        الكورس الثاني
+                    </a>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        <hr>
+        <div class="mt-3">
+            <a href="{{ url_for('instructor_dashboard') }}" class="btn btn-secondary w-100 mb-3">
+                <i class="fas fa-tachometer-alt me-2"></i>
+                لوحة التحكم
+            </a>
+            <a href="{{ url_for('logout') }}" class="btn btn-danger w-100">
+                <i class="fas fa-sign-out-alt me-2"></i>
+                تسجيل الخروج
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <div class="container-fluid">
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <h2 class="stage-title fade-in" id="stageTitle">المرحلة 1 - الكورس الأول</h2>
+            </div>
+            <div class="col-md-6">
+                <div class="report-filters fade-in">
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-primary report-type-btn active" data-report-type="all">
+                            <i class="fas fa-users me-1"></i> جميع الطلاب
+                        </button>
+                        <button type="button" class="btn btn-success report-type-btn" data-report-type="top10">
+                            <i class="fas fa-award me-1"></i> العشرة الأوائل
+                        </button>
+                        <button type="button" class="btn btn-success report-type-btn" data-report-type="passed">
+                            <i class="fas fa-check-circle me-1"></i> الطلاب الناجحين
+                        </button>
+                        <button type="button" class="btn btn-danger report-type-btn" data-report-type="failed">
+                            <i class="fas fa-exclamation-triangle me-1"></i> الطلاب الراسبين
+                        </button>
+                    </div>
+                    <button class="btn btn-info ms-2" id="printReport">
+                        <i class="fas fa-print me-1"></i> طباعة
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="alert alert-info fade-in" role="alert">
+            <i class="fas fa-info-circle me-2"></i>
+            يمكنك اختيار نوع التقرير من الأزرار أعلاه، وطباعة التقرير باستخدام زر الطباعة.
+        </div>
+
+        <div id="reportContainer" class="slide-in">
+            <!-- Report data will be loaded here -->
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">جاري التحميل...</span>
+                </div>
+                <p class="mt-2">جاري تحميل بيانات التقرير...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Print Template -->
+<div id="printTemplate" style="display: none;">
+    <div class="print-header">
+        <h1 class="text-center">نظام إدارة الامتحانات</h1>
+        <h2 class="text-center mb-4" id="printReportTitle">تقرير المرحلة 1 - الكورس الأول</h2>
+        <p class="text-center">تاريخ الطباعة: <span id="printDate"></span></p>
+    </div>
+    <div id="printContent"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        let currentStage = 1;
+        let currentSemester = 1;
+        let currentReportType = 'all';
+        
+        // Load report for the first stage and semester on page load
+        loadReport(currentStage, currentSemester, currentReportType);
+        
+        // Handle stage navigation
+        $('#stageNav .nav-link').click(function(e) {
+            e.preventDefault();
+            
+            // Update active state
+            $('#stageNav .nav-link').removeClass('active');
+            $(this).addClass('active');
+            
+            // Rotate the chevron icon
+            $(this).find('.stage-toggle-icon').toggleClass('rotate-icon');
+            
+            // Get the selected stage
+            currentStage = $(this).data('stage');
+            
+            // Reset semester to 1 when changing stage
+            currentSemester = 1;
+            
+            // Update active semester link
+            $('.semester-link').removeClass('active');
+            $(`.semester-link[data-stage="${currentStage}"][data-semester="1"]`).addClass('active');
+            
+            // Update title
+            updateTitle();
+            
+            // Load report for the selected stage and semester
+            loadReport(currentStage, currentSemester, currentReportType);
+        });
+        
+        // Handle semester navigation
+        $(document).on('click', '.semester-link', function(e) {
+            e.preventDefault();
+            
+            // Update active state
+            $('.semester-link').removeClass('active');
+            $(this).addClass('active');
+            
+            // Get the selected stage and semester
+            currentStage = $(this).data('stage');
+            currentSemester = $(this).data('semester');
+            
+            // Update title
+            updateTitle();
+            
+            // Load report for the selected stage and semester
+            loadReport(currentStage, currentSemester, currentReportType);
+        });
+        
+        // Handle report type buttons
+        $('.report-type-btn').click(function() {
+            $('.report-type-btn').removeClass('active');
+            $(this).addClass('active');
+            
+            currentReportType = $(this).data('report-type');
+            loadReport(currentStage, currentSemester, currentReportType);
+        });
+        
+        // Handle print button
+        $('#printReport').click(function() {
+            preparePrint();
+        });
+        
+        // Function to update the title
+        function updateTitle() {
+            $('#stageTitle').text(`المرحلة ${currentStage} - الكورس ${currentSemester}`);
+        }
+        
+        // Function to load report
+        function loadReport(stage, semester, reportType) {
+            $('#reportContainer').html(`
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">جاري التحميل...</span>
+                    </div>
+                    <p class="mt-2">جاري تحميل بيانات التقرير...</p>
+                </div>
+            `);
+            
+            $.ajax({
+                url: '{{ url_for("get_all_students") }}',
+                method: 'POST',
+                data: {
+                    stage: stage,
+                    semester: semester,
+                    report_type: reportType
+                },
+                success: function(data) {
+                    displayReport(data, reportType);
+                },
+                error: function(xhr) {
+                    $('#reportContainer').html(`
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            حدث خطأ أثناء تحميل البيانات. يرجى المحاولة مرة أخرى.
+                        </div>
+                    `);
+                    console.error('Error loading report:', xhr.responseText);
+                }
+            });
+        }
+        
+        // Function to display report
+        function displayReport(students, reportType) {
+            if (students.length === 0) {
+                $('#reportContainer').html(`
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        لا توجد بيانات متاحة لهذا التقرير.
+                    </div>
+                `);
+                return;
+            }
+            
+            let reportTitle = '';
+            if (reportType === 'all') {
+                reportTitle = 'تقرير جميع الطلاب';
+            } else if (reportType === 'top10') {
+                reportTitle = 'تقرير العشرة الأوائل';
+            } else if (reportType === 'failed') {
+                reportTitle = 'تقرير الطلاب الراسبين';
+            } else if (reportType === 'passed') {
+                reportTitle = 'تقرير الطلاب الناجحين';
+            }
+            
+            let html = `
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">${reportTitle} - المرحلة ${currentStage} - الكورس ${currentSemester}</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>اسم الطالب</th>
+                                        <th>الرقم الجامعي</th>
+                                        <th>المرحلة</th>
+                                        <th>المعدل</th>
+                                        <th>التقييم</th>
+                                        <th>المواد الناجحة</th>
+                                        <th>المواد الراسبة</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+            `;
+            
+            students.forEach(function(student, index) {
+                let rowClass = '';
+                if (student.failed_courses > 0) {
+                    rowClass = 'table-danger';
+                } else if (index < 10 && reportType !== 'failed') {
+                    rowClass = 'table-success';
+                }
+                
+                html += `
+                    <tr class="${rowClass}">
+                        <td>${index + 1}</td>
+                        <td>${student.name}</td>
+                        <td>${student.student_id}</td>
+                        <td>${student.stage}</td>
+                        <td>${student.average.toFixed(2)}</td>
+                        <td>${student.evaluation}</td>
+                        <td>${student.passed_courses}</td>
+                        <td>${student.failed_courses}</td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">إحصائيات التقرير</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="stat-card bg-primary text-white">
+                                    <div class="stat-card-body">
+                                        <h5 class="stat-card-title">إجمالي الطلاب</h5>
+                                        <p class="stat-card-value">${students.length}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card bg-success text-white">
+                                    <div class="stat-card-body">
+                                        <h5 class="stat-card-title">الطلاب الناجحين</h5>
+                                        <p class="stat-card-value">${students.filter(s => s.failed_courses === 0).length}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card bg-danger text-white">
+                                    <div class="stat-card-body">
+                                        <h5 class="stat-card-title">الطلاب الراسبين</h5>
+                                        <p class="stat-card-value">${students.filter(s => s.failed_courses > 0).length}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card bg-info text-white">
+                                    <div class="stat-card-body">
+                                        <h5 class="stat-card-title">متوسط المعدل</h5>
+                                        <p class="stat-card-value">${(students.reduce((sum, s) => sum + s.average, 0) / students.length).toFixed(2)}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            $('#reportContainer').html(html);
+        }
+        
+        // Function to prepare print
+        function preparePrint() {
+            // Set print title
+            let reportTypeText = '';
+            if (currentReportType === 'all') {
+                reportTypeText = 'تقرير جميع الطلاب';
+            } else if (currentReportType === 'top10') {
+                reportTypeText = 'تقرير العشرة الأوائل';
+            } else if (currentReportType === 'failed') {
+                reportTypeText = 'تقرير الطلاب الراسبين';
+            } else if (currentReportType === 'passed') {
+                reportTypeText = 'تقرير الطلاب الناجحين';
+            }
+            
+            $('#printReportTitle').text(`${reportTypeText} - المرحلة ${currentStage} - الكورس ${currentSemester}`);
+            
+            // Set current date
+            const now = new Date();
+            const dateString = now.toLocaleDateString('ar-EG', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            $('#printDate').text(dateString);
+            
+            // Clone report content to print template
+            $('#printContent').html($('#reportContainer').html());
+            
+            // Open print dialog
+            const printContent = document.getElementById('printTemplate').innerHTML;
+            const originalContent = document.body.innerHTML;
+            
+            document.body.innerHTML = printContent;
+            window.print();
+            document.body.innerHTML = originalContent;
+            
+            // Reinitialize event handlers after restoring content
+            $(document).ready(function() {
+                // Re-attach event handlers
+                $('#stageNav .nav-link').click(function(e) {
+                    e.preventDefault();
+                    currentStage = $(this).data('stage');
+                    updateTitle();
+                    loadReport(currentStage, currentSemester, currentReportType);
+                });
+                
+                $('.semester-link').click(function(e) {
+                    e.preventDefault();
+                    currentStage = $(this).data('stage');
+                    currentSemester = $(this).data('semester');
+                    updateTitle();
+                    loadReport(currentStage, currentSemester, currentReportType);
+                });
+                
+                $('.report-type-btn').click(function() {
+                    $('.report-type-btn').removeClass('active');
+                    $(this).addClass('active');
+                    currentReportType = $(this).data('report-type');
+                    loadReport(currentStage, currentSemester, currentReportType);
+                });
+                
+                $('#printReport').click(function() {
+                    preparePrint();
+                });
+            });
+        }
+    });
+</script>
+{% endblock %}

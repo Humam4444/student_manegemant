@@ -18,11 +18,12 @@
         <ul class="nav flex-column" id="stageNav">
             {% for stage in stages %}
             <li class="nav-item">
-                <a class="nav-link {% if loop.first %}active{% endif %}" href="#" data-stage="{{ stage }}">
+                <a class="nav-link {% if loop.first %}active{% endif %}" href="#" data-stage="{{ stage }}" data-bs-toggle="collapse" data-bs-target="#semesterLinks{{ stage }}">
                     <i class="fas fa-graduation-cap me-2"></i>
                     المرحلة {{ stage }}
+                    <i class="fas fa-chevron-down float-start stage-toggle-icon"></i>
                 </a>
-                <div class="ms-4 semester-links" id="semesterLinks{{ stage }}">
+                <div class="collapse {% if loop.first %}show{% endif %} ms-4 semester-links" id="semesterLinks{{ stage }}">
                     <a class="nav-link semester-link active" href="#" data-stage="{{ stage }}" data-semester="1">
                         <i class="fas fa-book me-2"></i>
                         الكورس الأول
@@ -37,6 +38,10 @@
         </ul>
         <hr>
         <div class="mt-5">
+            <a href="{{ url_for('instructor_reports') }}" class="btn btn-info w-100 mb-3">
+                <i class="fas fa-chart-bar me-2"></i>
+                التقارير
+            </a>
             <a href="{{ url_for('logout') }}" class="btn btn-danger w-100">
                 <i class="fas fa-sign-out-alt me-2"></i>
                 تسجيل الخروج
@@ -98,6 +103,9 @@
             // Update active state
             $('#stageNav .nav-link').removeClass('active');
             $(this).addClass('active');
+            
+            // Rotate the chevron icon
+            $(this).find('.stage-toggle-icon').toggleClass('rotate-icon');
             
             // Get the selected stage
             currentStage = $(this).data('stage');
