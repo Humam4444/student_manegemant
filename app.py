@@ -5,12 +5,24 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import os
 from datetime import datetime
 import sqlite3
+import pandas as pd
+import json
+from werkzeug.utils import secure_filename
+
+# تكوين مجلد لتخزين الملفات المرفوعة
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'xls'}
+
+# التأكد من وجود مجلد التحميل
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///examination.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQL_SCHEMA_FILE'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'database_schema.sql')
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -124,6 +136,16 @@ def instructor_dashboard():
     
     stages = [1, 2, 3, 4]
     return render_template('instructor_dashboard.html', stages=stages)
+
+@app.route('/instructor/modifications')
+@login_required
+def student_modifications():
+    if current_user.user_type != 'instructor':
+        flash('غير مصرح لك بالوصول إلى هذه الصفحة', 'danger')
+        return redirect(url_for('login'))
+    
+    stages = [1, 2, 3, 4]
+    return render_template('student_modifications.html', stages=stages)
 
 @app.route('/student/dashboard')
 @login_required
@@ -320,9 +342,7 @@ def instructor_reports():
         return redirect(url_for('login'))
     
     stages = [1, 2, 3, 4]
-    semesters = [1, 2]
-    
-    return render_template('instructor_reports.html', stages=stages, semesters=semesters)
+    return render_template('instructor_reports.html', stages=stages)
 
 @app.route('/get_all_students', methods=['POST'])
 @login_required
@@ -428,6 +448,589 @@ def get_all_students():
     
     return jsonify(result)
 
+@app.route('/add_student', methods=['POST'])
+@login_required
+def add_student():
+    if current_user.user_type != 'instructor':
+        return jsonify({'error': 'غير مصرح لك بإضافة طالب'}), 403
+    
+    # استلام بيانات الطالب من النموذج
+    name = request.form.get('name')
+    username = request.form.get('username')
+    student_id = request.form.get('student_id')
+    password = request.form.get('password', 'password')  # كلمة مرور افتراضية إذا لم يتم تحديدها
+    
+    # التحقق من صحة البيانات
+    if not all([name, username, student_id]):
+        return jsonify({'error': 'جميع الحقول مطلوبة'}), 400
+    
+    # التحقق من عدم وجود اسم مستخدم أو رقم طالب مكرر
+    if User.query.filter_by(username=username).first():
+        return jsonify({'error': 'اسم المستخدم موجود بالفعل'}), 400
+    
+    if Student.query.filter_by(student_id=student_id).first():
+        return jsonify({'error': 'رقم الطالب موجود بالفعل'}), 400
+    
+    try:
+        # إنشاء حساب المستخدم
+        user = User(
+            username=username,
+            name=name,
+            user_type='student'
+        )
+        user.set_password(password)
+        db.session.add(user)
+        db.session.flush()  # للحصول على معرف المستخدم
+        
+        # إنشاء سجل الطالب
+        student = Student(
+            user_id=user.id,
+            student_id=student_id,
+            stage=1  # تعيين المرحلة الأولى افتراضيًا
+        )
+        db.session.add(student)
+        db.session.commit()
+        
+        # إنشاء سجلات درجات فارغة للطالب
+        courses = Course.query.filter_by(stage=1).all()  # المرحلة الأولى افتراضيًا
+        for course in courses:
+            grade = Grade(
+                student_id=student.id,
+                course_id=course.id,
+                coursework=0,
+                final_exam=0,
+                decision_marks=0,
+                academic_year=f"{datetime.now().year}/{datetime.now().year+1}"
+            )
+            db.session.add(grade)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'تمت إضافة الطالب بنجاح',
+            'student': {
+                'id': student.id,
+                'name': user.name,
+                'username': user.username,
+                'student_id': student.student_id,
+                'stage': student.stage
+            }
+        })
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'حدث خطأ أثناء إضافة الطالب: {str(e)}'}), 500
+
+@app.route('/get_all_students_for_modification')
+@login_required
+def get_all_students_for_modification():
+    if current_user.user_type != 'instructor':
+        return jsonify({'error': 'غير مصرح لك بالوصول إلى هذه البيانات'}), 403
+    
+    students = Student.query.order_by(Student.stage, Student.student_id).all()
+    result = []
+    
+    for student in students:
+        user = User.query.get(student.user_id)
+        result.append({
+            'id': student.id,
+            'user_id': student.user_id,
+            'name': user.name,
+            'username': user.username,
+            'student_id': student.student_id,
+            'stage': student.stage
+        })
+    
+    return jsonify(result)
+
+@app.route('/search_student_for_modification', methods=['POST'])
+@login_required
+def search_student_for_modification():
+    if current_user.user_type != 'instructor':
+        return jsonify({'error': 'غير مصرح لك بالوصول إلى هذه البيانات'}), 403
+    
+    search_term = request.form.get('search_term', '')
+    if not search_term:
+        return jsonify([])
+    
+    # البحث في اسم الطالب ورقم الطالب واسم المستخدم
+    students = []
+    
+    # البحث في جدول المستخدمين (الاسم واسم المستخدم)
+    users = User.query.filter(
+        (User.user_type == 'student') & 
+        ((User.name.like(f'%{search_term}%')) | 
+         (User.username.like(f'%{search_term}%')))
+    ).all()
+    
+    user_ids = [user.id for user in users]
+    
+    # البحث في جدول الطلاب (رقم الطالب)
+    students_by_id = Student.query.filter(
+        (Student.student_id.like(f'%{search_term}%')) | 
+        (Student.user_id.in_(user_ids))
+    ).all()
+    
+    for student in students_by_id:
+        user = User.query.get(student.user_id)
+        students.append({
+            'id': student.id,
+            'user_id': student.user_id,
+            'name': user.name,
+            'username': user.username,
+            'student_id': student.student_id,
+            'stage': student.stage
+        })
+    
+    return jsonify(students)
+
+@app.route('/update_student', methods=['POST'])
+@login_required
+def update_student():
+    if current_user.user_type != 'instructor':
+        return jsonify({'error': 'غير مصرح لك بتعديل بيانات الطالب'}), 403
+    
+    # استلام بيانات الطالب من النموذج
+    student_id = request.form.get('student_id')
+    user_id = request.form.get('user_id')
+    name = request.form.get('name')
+    username = request.form.get('username')
+    student_id_number = request.form.get('student_id_number')
+    stage = request.form.get('stage')
+    password = request.form.get('password')
+    
+    # التحقق من صحة البيانات
+    if not all([student_id, user_id, name, username, student_id_number, stage]):
+        return jsonify({'error': 'جميع الحقول مطلوبة باستثناء كلمة المرور'}), 400
+    
+    try:
+        # التحقق من عدم وجود اسم مستخدم مكرر
+        existing_user = User.query.filter(User.username == username, User.id != int(user_id)).first()
+        if existing_user:
+            return jsonify({'error': 'اسم المستخدم موجود بالفعل'}), 400
+        
+        # التحقق من عدم وجود رقم طالب مكرر
+        existing_student = Student.query.filter(Student.student_id == student_id_number, Student.id != int(student_id)).first()
+        if existing_student:
+            return jsonify({'error': 'رقم الطالب موجود بالفعل'}), 400
+        
+        # تحديث بيانات المستخدم
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'لم يتم العثور على المستخدم'}), 404
+        
+        user.name = name
+        user.username = username
+        
+        # تحديث كلمة المرور إذا تم تقديمها
+        if password:
+            user.set_password(password)
+        
+        # تحديث بيانات الطالب
+        student = Student.query.get(student_id)
+        if not student:
+            return jsonify({'error': 'لم يتم العثور على الطالب'}), 404
+        
+        student.student_id = student_id_number
+        student.stage = int(stage)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'تم تحديث بيانات الطالب بنجاح'
+        })
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'حدث خطأ أثناء تحديث بيانات الطالب: {str(e)}'}), 500
+
+@app.route('/delete_student', methods=['POST'])
+@login_required
+def delete_student():
+    if current_user.user_type != 'instructor':
+        return jsonify({'error': 'غير مصرح لك بحذف الطالب'}), 403
+    
+    student_id = request.form.get('student_id')
+    
+    if not student_id:
+        return jsonify({'error': 'معرف الطالب مطلوب'}), 400
+    
+    try:
+        # البحث عن الطالب
+        student = Student.query.get(student_id)
+        if not student:
+            return jsonify({'error': 'لم يتم العثور على الطالب'}), 404
+        
+        # حذف درجات الطالب أولاً
+        Grade.query.filter_by(student_id=student.id).delete()
+        
+        # حفظ معرف المستخدم قبل حذف الطالب
+        user_id = student.user_id
+        
+        # حذف الطالب
+        db.session.delete(student)
+        
+        # حذف المستخدم المرتبط بالطالب
+        user = User.query.get(user_id)
+        if user:
+            db.session.delete(user)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'تم حذف الطالب بنجاح'
+        })
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'حدث خطأ أثناء حذف الطالب: {str(e)}'}), 500
+
+# التحقق من امتداد الملف
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route('/instructor/data_parser')
+@login_required
+def data_parser():
+    if current_user.user_type != 'instructor':
+        flash('غير مصرح لك بالوصول إلى هذه الصفحة', 'danger')
+        return redirect(url_for('login'))
+    
+    return render_template('data_parser.html')
+
+@app.route('/upload_file', methods=['POST'])
+@login_required
+def upload_file():
+    if current_user.user_type != 'instructor':
+        return jsonify({'error': 'غير مصرح لك برفع الملفات'}), 403
+    
+    # التحقق من وجود ملف في الطلب
+    if 'file' not in request.files:
+        return jsonify({'error': 'لم يتم تحديد ملف'}), 400
+    
+    file = request.files['file']
+    
+    # التحقق من اختيار ملف
+    if file.filename == '':
+        return jsonify({'error': 'لم يتم اختيار ملف'}), 400
+    
+    # التحقق من امتداد الملف
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'امتداد الملف غير مسموح به. الامتدادات المسموح بها هي: csv, xlsx, xls'}), 400
+    
+    # الحصول على نوع الجدول المستهدف
+    table_type = request.form.get('table_type')
+    if not table_type or table_type not in ['students', 'grades', 'courses']:
+        return jsonify({'error': 'نوع الجدول غير صالح'}), 400
+    
+    try:
+        # حفظ الملف
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
+        
+        # قراءة الملف باستخدام pandas
+        if filename.endswith('.csv'):
+            df = pd.read_csv(file_path)
+        else:
+            df = pd.read_excel(file_path)
+        
+        # التحقق من البيانات وتحويلها إلى قاموس
+        preview_data = df.head(5).to_dict('records')
+        all_data = df.to_dict('records')
+        
+        # حفظ البيانات في الجلسة للاستخدام لاحقًا
+        session['file_data'] = json.dumps(all_data)
+        session['table_type'] = table_type
+        
+        # إعداد معلومات الأعمدة المطلوبة لكل نوع جدول
+        required_columns = get_required_columns(table_type)
+        
+        # التحقق من وجود الأعمدة المطلوبة
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        
+        return jsonify({
+            'success': True,
+            'preview': preview_data,
+            'total_rows': len(all_data),
+            'columns': df.columns.tolist(),
+            'required_columns': required_columns,
+            'missing_columns': missing_columns
+        })
+    
+    except Exception as e:
+        return jsonify({'error': f'حدث خطأ أثناء معالجة الملف: {str(e)}'}), 500
+    finally:
+        # حذف الملف بعد معالجته
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+def get_required_columns(table_type):
+    """تحديد الأعمدة المطلوبة لكل نوع جدول"""
+    if table_type == 'students':
+        return ['name', 'username', 'student_id', 'stage']
+    elif table_type == 'grades':
+        return ['student_id', 'course_id', 'first_attempt', 'second_attempt', 'final_grade']
+    elif table_type == 'courses':
+        return ['name', 'stage', 'semester']
+    return []
+
+@app.route('/import_data', methods=['POST'])
+@login_required
+def import_data():
+    if current_user.user_type != 'instructor':
+        return jsonify({'error': 'غير مصرح لك باستيراد البيانات'}), 403
+    
+    # استرجاع البيانات من الجلسة
+    file_data_json = session.get('file_data')
+    table_type = session.get('table_type')
+    
+    if not file_data_json or not table_type:
+        return jsonify({'error': 'لم يتم العثور على بيانات للاستيراد'}), 400
+    
+    try:
+        # تحويل البيانات من JSON إلى قائمة قواميس
+        file_data = json.loads(file_data_json)
+        
+        # استيراد البيانات حسب نوع الجدول
+        if table_type == 'students':
+            result = import_students(file_data)
+        elif table_type == 'grades':
+            result = import_grades(file_data)
+        elif table_type == 'courses':
+            result = import_courses(file_data)
+        else:
+            return jsonify({'error': 'نوع الجدول غير صالح'}), 400
+        
+        # حذف البيانات من الجلسة
+        session.pop('file_data', None)
+        session.pop('table_type', None)
+        
+        return jsonify(result)
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'حدث خطأ أثناء استيراد البيانات: {str(e)}'}), 500
+
+def import_students(data):
+    """استيراد بيانات الطلاب"""
+    success_count = 0
+    error_count = 0
+    errors = []
+    
+    for i, row in enumerate(data):
+        try:
+            # التحقق من وجود البيانات المطلوبة
+            if not all(key in row for key in ['name', 'username', 'student_id', 'stage']):
+                errors.append({
+                    'row': i + 1,
+                    'error': 'بيانات غير مكتملة'
+                })
+                error_count += 1
+                continue
+            
+            # التحقق من عدم وجود اسم مستخدم مكرر
+            if User.query.filter_by(username=row['username']).first():
+                errors.append({
+                    'row': i + 1,
+                    'error': f'اسم المستخدم {row["username"]} موجود بالفعل'
+                })
+                error_count += 1
+                continue
+            
+            # التحقق من عدم وجود رقم طالب مكرر
+            if Student.query.filter_by(student_id=row['student_id']).first():
+                errors.append({
+                    'row': i + 1,
+                    'error': f'رقم الطالب {row["student_id"]} موجود بالفعل'
+                })
+                error_count += 1
+                continue
+            
+            # إنشاء مستخدم جديد
+            user = User(
+                name=row['name'],
+                username=row['username'],
+                user_type='student'
+            )
+            
+            # تعيين كلمة مرور افتراضية
+            password = row.get('password', 'password')
+            user.set_password(password)
+            
+            db.session.add(user)
+            db.session.flush()  # للحصول على معرف المستخدم
+            
+            # إنشاء طالب جديد
+            student = Student(
+                user_id=user.id,
+                student_id=row['student_id'],
+                stage=int(row['stage'])
+            )
+            
+            db.session.add(student)
+            success_count += 1
+            
+        except Exception as e:
+            errors.append({
+                'row': i + 1,
+                'error': str(e)
+            })
+            error_count += 1
+    
+    # حفظ التغييرات إذا كانت هناك عمليات ناجحة
+    if success_count > 0:
+        db.session.commit()
+    
+    return {
+        'success': True,
+        'success_count': success_count,
+        'error_count': error_count,
+        'errors': errors
+    }
+
+def import_grades(data):
+    """استيراد بيانات الدرجات"""
+    success_count = 0
+    error_count = 0
+    errors = []
+    
+    for i, row in enumerate(data):
+        try:
+            # التحقق من وجود البيانات المطلوبة
+            if not all(key in row for key in ['student_id', 'course_id']):
+                errors.append({
+                    'row': i + 1,
+                    'error': 'بيانات غير مكتملة'
+                })
+                error_count += 1
+                continue
+            
+            # البحث عن الطالب
+            student = Student.query.filter_by(student_id=row['student_id']).first()
+            if not student:
+                errors.append({
+                    'row': i + 1,
+                    'error': f'الطالب برقم {row["student_id"]} غير موجود'
+                })
+                error_count += 1
+                continue
+            
+            # البحث عن المقرر
+            course = Course.query.get(row['course_id'])
+            if not course:
+                errors.append({
+                    'row': i + 1,
+                    'error': f'المقرر برقم {row["course_id"]} غير موجود'
+                })
+                error_count += 1
+                continue
+            
+            # التحقق من عدم وجود درجة مسجلة مسبقًا
+            existing_grade = Grade.query.filter_by(student_id=student.id, course_id=course.id).first()
+            
+            if existing_grade:
+                # تحديث الدرجة الموجودة
+                if 'first_attempt' in row:
+                    existing_grade.first_attempt = row['first_attempt']
+                if 'second_attempt' in row:
+                    existing_grade.second_attempt = row['second_attempt']
+                if 'final_grade' in row:
+                    existing_grade.final_grade = row['final_grade']
+            else:
+                # إنشاء درجة جديدة
+                grade = Grade(
+                    student_id=student.id,
+                    course_id=course.id,
+                    first_attempt=row.get('first_attempt'),
+                    second_attempt=row.get('second_attempt'),
+                    final_grade=row.get('final_grade')
+                )
+                db.session.add(grade)
+            
+            success_count += 1
+            
+        except Exception as e:
+            errors.append({
+                'row': i + 1,
+                'error': str(e)
+            })
+            error_count += 1
+    
+    # حفظ التغييرات إذا كانت هناك عمليات ناجحة
+    if success_count > 0:
+        db.session.commit()
+    
+    return {
+        'success': True,
+        'success_count': success_count,
+        'error_count': error_count,
+        'errors': errors
+    }
+
+def import_courses(data):
+    """استيراد بيانات المقررات"""
+    success_count = 0
+    error_count = 0
+    errors = []
+    
+    for i, row in enumerate(data):
+        try:
+            # التحقق من وجود البيانات المطلوبة
+            if not all(key in row for key in ['name', 'stage', 'semester']):
+                errors.append({
+                    'row': i + 1,
+                    'error': 'بيانات غير مكتملة'
+                })
+                error_count += 1
+                continue
+            
+            # التحقق من عدم وجود مقرر بنفس الاسم والمرحلة والفصل
+            existing_course = Course.query.filter_by(
+                name=row['name'],
+                stage=int(row['stage']),
+                semester=int(row['semester'])
+            ).first()
+            
+            if existing_course:
+                errors.append({
+                    'row': i + 1,
+                    'error': f'المقرر {row["name"]} للمرحلة {row["stage"]} والفصل {row["semester"]} موجود بالفعل'
+                })
+                error_count += 1
+                continue
+            
+            # إنشاء مقرر جديد
+            course = Course(
+                name=row['name'],
+                stage=int(row['stage']),
+                semester=int(row['semester'])
+            )
+            
+            db.session.add(course)
+            success_count += 1
+            
+        except Exception as e:
+            errors.append({
+                'row': i + 1,
+                'error': str(e)
+            })
+            error_count += 1
+    
+    # حفظ التغييرات إذا كانت هناك عمليات ناجحة
+    if success_count > 0:
+        db.session.commit()
+    
+    return {
+        'success': True,
+        'success_count': success_count,
+        'error_count': error_count,
+        'errors': errors
+    }
+
 # Initialize the database and add initial data
 def init_db():
     with app.app_context():
@@ -435,13 +1038,12 @@ def init_db():
         db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', 'examination.db')
         db_exists = os.path.exists(db_path)
         
-        # حذف جميع الجداول وإعادة إنشائها
-        db.drop_all()
+        # إنشاء الجداول إذا لم تكن موجودة بالفعل
         db.create_all()
         
-        # تجاوز فحص وجود مستخدمين في قاعدة البيانات
-        # if User.query.count() > 0:
-        #     return
+        # التحقق من وجود مستخدمين في قاعدة البيانات
+        if User.query.count() > 0:
+            return  # إذا كان هناك مستخدمين بالفعل، لا تقم بإضافة بيانات افتراضية
             
         # If SQL schema file exists, use it to initialize the database
         if os.path.exists(app.config['SQL_SCHEMA_FILE']):

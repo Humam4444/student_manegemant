@@ -1,0 +1,653 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="sidebar-toggle">
+    <i class="fas fa-bars"></i>
+</div>
+
+<div class="sidebar">
+    <div class="p-3">
+        <h4 class="text-center mb-4">التعديلات</h4>
+        <div class="text-center mb-4">
+            <i class="fas fa-user-edit fa-3x mb-2"></i>
+            <h5>{{ current_user.name }}</h5>
+            <p class="text-muted">تدريسي</p>
+        </div>
+        <hr>
+        <a href="{{ url_for('instructor_dashboard') }}" class="btn btn-primary w-100 mb-3">
+            <i class="fas fa-tachometer-alt me-2"></i>
+            لوحة التحكم
+        </a>
+        <a href="{{ url_for('instructor_reports') }}" class="btn btn-primary w-100 mb-3">
+            <i class="fas fa-chart-bar me-2"></i>
+            التقارير
+        </a>
+        <a href="{{ url_for('data_parser') }}" class="btn btn-primary w-100 mb-3">
+            <i class="fas fa-file-excel me-2"></i>
+            استيراد البيانات
+        </a>
+        <a href="{{ url_for('student_modifications') }}" class="btn btn-success w-100 mb-3">
+            <i class="fas fa-user-edit me-2"></i>
+            تعديل الطلاب
+        </a>
+        <hr>
+        <h6 class="sidebar-heading px-3 mt-4 mb-2 text-muted">العمليات</h6>
+        <ul class="nav flex-column">
+            <li class="nav-item">
+                <a class="nav-link active" href="#" id="addStudentLink">
+                    <i class="fas fa-user-plus me-2"></i>
+                    إضافة طالب
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" id="editStudentLink">
+                    <i class="fas fa-user-edit me-2"></i>
+                    تعديل طالب
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" id="deleteStudentLink">
+                    <i class="fas fa-user-minus me-2"></i>
+                    حذف طالب
+                </a>
+            </li>
+        </ul>
+        <hr>
+        <div class="mt-3">
+            <a href="{{ url_for('logout') }}" class="btn btn-danger w-100">
+                <i class="fas fa-sign-out-alt me-2"></i>
+                تسجيل الخروج
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <div class="container-fluid">
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <h2 class="stage-title fade-in" id="operationTitle">إضافة طالب</h2>
+            </div>
+            <div class="col-md-6">
+                <div class="d-flex justify-content-end">
+                    <div class="search-box fade-in me-2" id="searchBox" style="display: none;">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="searchInput" placeholder="البحث عن طالب...">
+                            <button class="btn btn-primary" id="searchBtn">
+                                <i class="fas fa-search"></i>
+                                بحث
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="operationContainer" class="slide-in">
+            <!-- هنا سيتم عرض نموذج إضافة طالب افتراضياً -->
+            <div class="card">
+                <div class="card-body">
+                    <form id="addStudentForm">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="studentName" class="form-label">اسم الطالب</label>
+                                <input type="text" class="form-control" id="studentName" name="name" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="studentUsername" class="form-label">اسم المستخدم</label>
+                                <input type="text" class="form-control" id="studentUsername" name="username" required>
+                                <div class="form-text">سيستخدم الطالب اسم المستخدم هذا لتسجيل الدخول</div>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="studentId" class="form-label">رقم الطالب</label>
+                                <input type="text" class="form-control" id="studentId" name="student_id" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="studentStage" class="form-label">المرحلة الدراسية</label>
+                                <select class="form-select" id="studentStage" name="stage" required>
+                                    <option value="1">المرحلة الأولى</option>
+                                    <option value="2">المرحلة الثانية</option>
+                                    <option value="3">المرحلة الثالثة</option>
+                                    <option value="4">المرحلة الرابعة</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="studentPassword" class="form-label">كلمة المرور</label>
+                            <input type="password" class="form-control" id="studentPassword" name="password" value="password">
+                            <div class="form-text">كلمة المرور الافتراضية هي "password"</div>
+                        </div>
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="submit" class="btn btn-primary" id="saveStudentBtn">
+                                <i class="fas fa-save me-1"></i> حفظ
+                            </button>
+                        </div>
+                    </form>
+                    <div id="addStudentAlert" class="alert mt-3 d-none"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="editStudentContainer" class="slide-in" style="display: none;">
+            <!-- هنا سيتم عرض قائمة الطلاب للتعديل -->
+            <div class="text-center py-5" id="editStudentLoading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">جاري التحميل...</span>
+                </div>
+                <p class="mt-2">جاري تحميل بيانات الطلاب...</p>
+            </div>
+            <div id="editStudentsList"></div>
+        </div>
+
+        <div id="deleteStudentContainer" class="slide-in" style="display: none;">
+            <!-- هنا سيتم عرض قائمة الطلاب للحذف -->
+            <div class="text-center py-5" id="deleteStudentLoading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">جاري التحميل...</span>
+                </div>
+                <p class="mt-2">جاري تحميل بيانات الطلاب...</p>
+            </div>
+            <div id="deleteStudentsList"></div>
+        </div>
+    </div>
+</div>
+
+<!-- نموذج تعديل طالب -->
+<div class="modal fade" id="editStudentModal" tabindex="-1" aria-labelledby="editStudentModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editStudentModalLabel">تعديل بيانات الطالب</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editStudentForm">
+                    <input type="hidden" id="editStudentId" name="student_id">
+                    <input type="hidden" id="editUserId" name="user_id">
+                    <div class="mb-3">
+                        <label for="editName" class="form-label">اسم الطالب</label>
+                        <input type="text" class="form-control" id="editName" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editUsername" class="form-label">اسم المستخدم</label>
+                        <input type="text" class="form-control" id="editUsername" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editStudentIdNumber" class="form-label">رقم الطالب</label>
+                        <input type="text" class="form-control" id="editStudentIdNumber" name="student_id_number" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editStage" class="form-label">المرحلة الدراسية</label>
+                        <select class="form-select" id="editStage" name="stage" required>
+                            <option value="1">المرحلة الأولى</option>
+                            <option value="2">المرحلة الثانية</option>
+                            <option value="3">المرحلة الثالثة</option>
+                            <option value="4">المرحلة الرابعة</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editPassword" class="form-label">كلمة المرور الجديدة (اتركها فارغة إذا لم ترغب بتغييرها)</label>
+                        <input type="password" class="form-control" id="editPassword" name="password">
+                    </div>
+                </form>
+                <div id="editStudentAlert" class="alert d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-primary" id="updateStudentBtn">حفظ التغييرات</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نموذج تأكيد الحذف -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteConfirmModalLabel">تأكيد حذف الطالب</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <p>هل أنت متأكد من رغبتك في حذف الطالب <strong id="deleteStudentName"></strong>؟</p>
+                <p class="text-danger">هذا الإجراء لا يمكن التراجع عنه وسيتم حذف جميع بيانات الطالب ودرجاته.</p>
+                <input type="hidden" id="deleteStudentId">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">تأكيد الحذف</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // التبديل بين العمليات المختلفة
+        $('#addStudentLink').click(function(e) {
+            e.preventDefault();
+            $('.nav-link').removeClass('active');
+            $(this).addClass('active');
+            $('#operationTitle').text('إضافة طالب');
+            $('#operationContainer').show();
+            $('#editStudentContainer').hide();
+            $('#deleteStudentContainer').hide();
+            $('#searchBox').hide();
+        });
+        
+        $('#editStudentLink').click(function(e) {
+            e.preventDefault();
+            $('.nav-link').removeClass('active');
+            $(this).addClass('active');
+            $('#operationTitle').text('تعديل طالب');
+            $('#operationContainer').hide();
+            $('#editStudentContainer').show();
+            $('#deleteStudentContainer').hide();
+            $('#searchBox').show();
+            loadAllStudents('edit');
+        });
+        
+        $('#deleteStudentLink').click(function(e) {
+            e.preventDefault();
+            $('.nav-link').removeClass('active');
+            $(this).addClass('active');
+            $('#operationTitle').text('حذف طالب');
+            $('#operationContainer').hide();
+            $('#editStudentContainer').hide();
+            $('#deleteStudentContainer').show();
+            $('#searchBox').show();
+            loadAllStudents('delete');
+        });
+        
+        // إضافة طالب جديد
+        $('#addStudentForm').submit(function(e) {
+            e.preventDefault();
+            
+            // التحقق من صحة النموذج
+            if (!this.checkValidity()) {
+                this.reportValidity();
+                return;
+            }
+            
+            // جمع بيانات النموذج
+            const formData = {
+                name: $('#studentName').val(),
+                username: $('#studentUsername').val(),
+                student_id: $('#studentId').val(),
+                stage: $('#studentStage').val(),
+                password: $('#studentPassword').val()
+            };
+            
+            // إرسال البيانات إلى الخادم
+            $.ajax({
+                url: '{{ url_for("add_student") }}',
+                method: 'POST',
+                data: formData,
+                beforeSend: function() {
+                    $('#saveStudentBtn').prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> جاري الحفظ...');
+                },
+                success: function(response) {
+                    $('#addStudentAlert').removeClass('d-none alert-danger').addClass('alert-success').html(`
+                        <i class="fas fa-check-circle me-2"></i>
+                        ${response.message}
+                    `);
+                    
+                    // إعادة تعيين النموذج
+                    $('#addStudentForm')[0].reset();
+                    $('#studentPassword').val('password');
+                },
+                error: function(xhr) {
+                    const errorMessage = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : 'حدث خطأ أثناء إضافة الطالب. يرجى المحاولة مرة أخرى.';
+                    $('#addStudentAlert').removeClass('d-none alert-success').addClass('alert-danger').html(`
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        ${errorMessage}
+                    `);
+                },
+                complete: function() {
+                    $('#saveStudentBtn').prop('disabled', false).html('<i class="fas fa-save me-1"></i> حفظ');
+                    
+                    // إخفاء رسالة النجاح بعد 5 ثوان
+                    setTimeout(function() {
+                        $('#addStudentAlert').addClass('d-none');
+                    }, 5000);
+                }
+            });
+        });
+        
+        // البحث عن طالب
+        $('#searchBtn').click(function() {
+            const searchTerm = $('#searchInput').val().trim();
+            const currentOperation = $('.nav-link.active').attr('id');
+            
+            if (searchTerm === '') {
+                if (currentOperation === 'editStudentLink') {
+                    loadAllStudents('edit');
+                } else if (currentOperation === 'deleteStudentLink') {
+                    loadAllStudents('delete');
+                }
+                return;
+            }
+            
+            // عرض مؤشر التحميل
+            if (currentOperation === 'editStudentLink') {
+                $('#editStudentsList').html('');
+                $('#editStudentLoading').show();
+            } else if (currentOperation === 'deleteStudentLink') {
+                $('#deleteStudentsList').html('');
+                $('#deleteStudentLoading').show();
+            }
+            
+            $.ajax({
+                url: '{{ url_for("search_student_for_modification") }}',
+                method: 'POST',
+                data: {
+                    search_term: searchTerm
+                },
+                success: function(data) {
+                    if (currentOperation === 'editStudentLink') {
+                        displayStudentsForEdit(data);
+                    } else if (currentOperation === 'deleteStudentLink') {
+                        displayStudentsForDelete(data);
+                    }
+                },
+                error: function(xhr) {
+                    const errorMessage = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : 'حدث خطأ أثناء البحث. يرجى المحاولة مرة أخرى.';
+                    const alertHtml = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            ${errorMessage}
+                        </div>
+                    `;
+                    
+                    if (currentOperation === 'editStudentLink') {
+                        $('#editStudentsList').html(alertHtml);
+                        $('#editStudentLoading').hide();
+                    } else if (currentOperation === 'deleteStudentLink') {
+                        $('#deleteStudentsList').html(alertHtml);
+                        $('#deleteStudentLoading').hide();
+                    }
+                }
+            });
+        });
+        
+        // تحميل جميع الطلاب
+        function loadAllStudents(operation) {
+            if (operation === 'edit') {
+                $('#editStudentsList').html('');
+                $('#editStudentLoading').show();
+            } else if (operation === 'delete') {
+                $('#deleteStudentsList').html('');
+                $('#deleteStudentLoading').show();
+            }
+            
+            $.ajax({
+                url: '{{ url_for("get_all_students_for_modification") }}',
+                method: 'GET',
+                success: function(data) {
+                    if (operation === 'edit') {
+                        displayStudentsForEdit(data);
+                    } else if (operation === 'delete') {
+                        displayStudentsForDelete(data);
+                    }
+                },
+                error: function(xhr) {
+                    const errorMessage = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : 'حدث خطأ أثناء تحميل بيانات الطلاب. يرجى المحاولة مرة أخرى.';
+                    const alertHtml = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            ${errorMessage}
+                        </div>
+                    `;
+                    
+                    if (operation === 'edit') {
+                        $('#editStudentsList').html(alertHtml);
+                        $('#editStudentLoading').hide();
+                    } else if (operation === 'delete') {
+                        $('#deleteStudentsList').html(alertHtml);
+                        $('#deleteStudentLoading').hide();
+                    }
+                }
+            });
+        }
+        
+        // عرض الطلاب للتعديل
+        function displayStudentsForEdit(students) {
+            $('#editStudentLoading').hide();
+            
+            if (students.length === 0) {
+                $('#editStudentsList').html(`
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        لم يتم العثور على طلاب.
+                    </div>
+                `);
+                return;
+            }
+            
+            let html = '<div class="row">';
+            
+            students.forEach(function(student) {
+                html += `
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card h-100">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-user-graduate me-2"></i>
+                                    ${student.name}
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>اسم المستخدم:</strong> ${student.username}</p>
+                                <p><strong>رقم الطالب:</strong> ${student.student_id}</p>
+                                <p><strong>المرحلة:</strong> ${student.stage}</p>
+                            </div>
+                            <div class="card-footer bg-white">
+                                <button class="btn btn-primary w-100 edit-student-btn" 
+                                    data-student-id="${student.id}"
+                                    data-user-id="${student.user_id}"
+                                    data-name="${student.name}"
+                                    data-username="${student.username}"
+                                    data-student-id-number="${student.student_id}"
+                                    data-stage="${student.stage}">
+                                    <i class="fas fa-edit me-1"></i> تعديل
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            $('#editStudentsList').html(html);
+            
+            // تفعيل أزرار التعديل
+            $('.edit-student-btn').click(function() {
+                const studentId = $(this).data('student-id');
+                const userId = $(this).data('user-id');
+                const name = $(this).data('name');
+                const username = $(this).data('username');
+                const studentIdNumber = $(this).data('student-id-number');
+                const stage = $(this).data('stage');
+                
+                // ملء نموذج التعديل
+                $('#editStudentId').val(studentId);
+                $('#editUserId').val(userId);
+                $('#editName').val(name);
+                $('#editUsername').val(username);
+                $('#editStudentIdNumber').val(studentIdNumber);
+                $('#editStage').val(stage);
+                $('#editPassword').val('');
+                
+                // إظهار النموذج
+                $('#editStudentAlert').addClass('d-none');
+                $('#editStudentModal').modal('show');
+            });
+        }
+        
+        // عرض الطلاب للحذف
+        function displayStudentsForDelete(students) {
+            $('#deleteStudentLoading').hide();
+            
+            if (students.length === 0) {
+                $('#deleteStudentsList').html(`
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        لم يتم العثور على طلاب.
+                    </div>
+                `);
+                return;
+            }
+            
+            let html = '<div class="row">';
+            
+            students.forEach(function(student) {
+                html += `
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card h-100">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-user-graduate me-2"></i>
+                                    ${student.name}
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>اسم المستخدم:</strong> ${student.username}</p>
+                                <p><strong>رقم الطالب:</strong> ${student.student_id}</p>
+                                <p><strong>المرحلة:</strong> ${student.stage}</p>
+                            </div>
+                            <div class="card-footer bg-white">
+                                <button class="btn btn-danger w-100 delete-student-btn" 
+                                    data-student-id="${student.id}"
+                                    data-name="${student.name}">
+                                    <i class="fas fa-trash-alt me-1"></i> حذف
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            $('#deleteStudentsList').html(html);
+            
+            // تفعيل أزرار الحذف
+            $('.delete-student-btn').click(function() {
+                const studentId = $(this).data('student-id');
+                const name = $(this).data('name');
+                
+                // ملء نموذج تأكيد الحذف
+                $('#deleteStudentId').val(studentId);
+                $('#deleteStudentName').text(name);
+                
+                // إظهار النموذج
+                $('#deleteConfirmModal').modal('show');
+            });
+        }
+        
+        // تحديث بيانات الطالب
+        $('#updateStudentBtn').click(function() {
+            // التحقق من صحة النموذج
+            if (!$('#editStudentForm')[0].checkValidity()) {
+                $('#editStudentForm')[0].reportValidity();
+                return;
+            }
+            
+            // جمع بيانات النموذج
+            const formData = {
+                student_id: $('#editStudentId').val(),
+                user_id: $('#editUserId').val(),
+                name: $('#editName').val(),
+                username: $('#editUsername').val(),
+                student_id_number: $('#editStudentIdNumber').val(),
+                stage: $('#editStage').val(),
+                password: $('#editPassword').val()
+            };
+            
+            // إرسال البيانات إلى الخادم
+            $.ajax({
+                url: '{{ url_for("update_student") }}',
+                method: 'POST',
+                data: formData,
+                beforeSend: function() {
+                    $('#updateStudentBtn').prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> جاري الحفظ...');
+                },
+                success: function(response) {
+                    $('#editStudentAlert').removeClass('d-none alert-danger').addClass('alert-success').html(`
+                        <i class="fas fa-check-circle me-2"></i>
+                        ${response.message}
+                    `);
+                    
+                    // إعادة تحميل قائمة الطلاب بعد 1.5 ثانية
+                    setTimeout(function() {
+                        $('#editStudentModal').modal('hide');
+                        loadAllStudents('edit');
+                    }, 1500);
+                },
+                error: function(xhr) {
+                    const errorMessage = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : 'حدث خطأ أثناء تحديث بيانات الطالب. يرجى المحاولة مرة أخرى.';
+                    $('#editStudentAlert').removeClass('d-none alert-success').addClass('alert-danger').html(`
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        ${errorMessage}
+                    `);
+                },
+                complete: function() {
+                    $('#updateStudentBtn').prop('disabled', false).text('حفظ التغييرات');
+                }
+            });
+        });
+        
+        // حذف طالب
+        $('#confirmDeleteBtn').click(function() {
+            const studentId = $('#deleteStudentId').val();
+            
+            $.ajax({
+                url: '{{ url_for("delete_student") }}',
+                method: 'POST',
+                data: {
+                    student_id: studentId
+                },
+                beforeSend: function() {
+                    $('#confirmDeleteBtn').prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> جاري الحذف...');
+                },
+                success: function(response) {
+                    // إغلاق النموذج
+                    $('#deleteConfirmModal').modal('hide');
+                    
+                    // عرض رسالة نجاح
+                    $('#deleteStudentsList').prepend(`
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            <i class="fas fa-check-circle me-2"></i>
+                            ${response.message}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="إغلاق"></button>
+                        </div>
+                    `);
+                    
+                    // إعادة تحميل قائمة الطلاب
+                    loadAllStudents('delete');
+                },
+                error: function(xhr) {
+                    // إغلاق النموذج
+                    $('#deleteConfirmModal').modal('hide');
+                    
+                    // عرض رسالة خطأ
+                    const errorMessage = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : 'حدث خطأ أثناء حذف الطالب. يرجى المحاولة مرة أخرى.';
+                    $('#deleteStudentsList').prepend(`
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            ${errorMessage}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="إغلاق"></button>
+                        </div>
+                    `);
+                },
+                complete: function() {
+                    $('#confirmDeleteBtn').prop('disabled', false).text('تأكيد الحذف');
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

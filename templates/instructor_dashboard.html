@@ -42,6 +42,14 @@
                 <i class="fas fa-chart-bar me-2"></i>
                 التقارير
             </a>
+            <a href="{{ url_for('data_parser') }}" class="btn btn-primary w-100 mb-3">
+                <i class="fas fa-file-excel me-2"></i>
+                استيراد البيانات
+            </a>
+            <a href="{{ url_for('student_modifications') }}" class="btn btn-success w-100 mb-3">
+                <i class="fas fa-user-edit me-2"></i>
+                التعديلات
+            </a>
             <a href="{{ url_for('logout') }}" class="btn btn-danger w-100">
                 <i class="fas fa-sign-out-alt me-2"></i>
                 تسجيل الخروج
@@ -57,21 +65,18 @@
                 <h2 class="stage-title fade-in" id="stageTitle">المرحلة 1 - الكورس الأول</h2>
             </div>
             <div class="col-md-6">
-                <div class="search-box fade-in">
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="searchInput" placeholder="البحث عن طالب...">
-                        <button class="btn btn-primary" id="searchBtn">
-                            <i class="fas fa-search"></i>
-                            بحث
-                        </button>
+                <div class="d-flex justify-content-end">
+                    <div class="search-box fade-in me-2">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="searchInput" placeholder="البحث عن طالب...">
+                            <button class="btn btn-primary" id="searchBtn">
+                                <i class="fas fa-search"></i>
+                                بحث
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-
-        <div class="alert alert-info fade-in" role="alert">
-            <i class="fas fa-info-circle me-2"></i>
-            يمكنك تعديل درجات الطلاب مباشرة من الجدول أدناه. سيتم حفظ التغييرات تلقائياً.
         </div>
 
         <div id="studentsContainer" class="slide-in">
@@ -85,6 +90,38 @@
         </div>
     </div>
 </div>
+
+<!-- نموذج عرض درجات الطالب -->
+<div class="modal fade" id="viewGradesModal" tabindex="-1" aria-labelledby="viewGradesModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewGradesModalLabel">عرض درجات الطالب</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <h5 id="studentNameInModal"></h5>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>الرقم</th>
+                            <th>اسم المادة</th>
+                            <th>المحاولة الأولى</th>
+                            <th>المحاولة الثانية</th>
+                            <th>الدرجة النهائية</th>
+                        </tr>
+                    </thead>
+                    <tbody id="gradesTableBody">
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -94,7 +131,7 @@
         let currentSemester = 1;
         
         // Load students for the first stage and semester on page load
-        loadStudents(currentStage, currentSemester);
+        loadStudents();
         
         // Handle stage navigation
         $('#stageNav .nav-link').click(function(e) {
@@ -121,7 +158,7 @@
             updateTitle();
             
             // Load students for the selected stage and semester
-            loadStudents(currentStage, currentSemester);
+            loadStudents();
         });
         
         // Handle semester navigation
@@ -140,18 +177,18 @@
             updateTitle();
             
             // Load students for the selected stage and semester
-            loadStudents(currentStage, currentSemester);
+            loadStudents();
         });
         
         // Handle search
         $('#searchBtn').click(function() {
-            searchStudent();
+            searchStudents();
         });
         
         // Handle search on Enter key
         $('#searchInput').keypress(function(e) {
             if (e.which === 13) {
-                searchStudent();
+                searchStudents();
             }
         });
         
@@ -161,7 +198,7 @@
         }
         
         // Function to load students
-        function loadStudents(stage, semester) {
+        function loadStudents() {
             $('#studentsContainer').html(`
                 <div class="text-center py-5">
                     <div class="spinner-border text-primary" role="status">
@@ -175,8 +212,8 @@
                 url: '{{ url_for("get_students_by_stage_semester") }}',
                 method: 'POST',
                 data: {
-                    stage: stage,
-                    semester: semester
+                    stage: currentStage,
+                    semester: currentSemester
                 },
                 success: function(data) {
                     displayStudents(data);
@@ -194,12 +231,12 @@
         }
         
         // Function to search for a student
-        function searchStudent() {
+        function searchStudents() {
             const searchTerm = $('#searchInput').val().trim();
             
             if (searchTerm === '') {
                 // If search term is empty, load all students
-                loadStudents(currentStage, currentSemester);
+                loadStudents();
                 return;
             }
             
